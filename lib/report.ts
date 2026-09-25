@@ -164,6 +164,13 @@ export function renderPlanEmailHtml(config: CampaignConfig, meta: PlanMeta = {})
 </body></html>`;
 }
 
+/** The report without the <html>/<body> wrapper — for pasting into an email being composed. */
+export function renderPlanEmailFragment(config: CampaignConfig, meta: PlanMeta = {}): string {
+  const html = renderPlanEmailHtml(config, meta);
+  const m = html.match(/<body[^>]*>([\s\S]*)<\/body>/);
+  return m ? m[1] : html;
+}
+
 /** Plain-text version, used as the email text part and for the mailto fallback. */
 export function renderPlanEmailText(config: CampaignConfig, meta: PlanMeta = {}): string {
   const r = calculateCampaign(config);
