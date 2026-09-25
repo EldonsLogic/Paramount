@@ -104,6 +104,11 @@ export function Calculator() {
           onUniverse={(universe) => setConfig((c) => ({ ...c, universe }))}
           onOverlap={(overlapPct) => setConfig((c) => ({ ...c, overlapPct }))}
         />
+        <Benchmarks
+          config={config}
+          onChange={(benchmarks) => setConfig((c) => ({ ...c, benchmarks }))}
+          onToggle={(useBenchmarks) => setConfig((c) => ({ ...c, useBenchmarks }))}
+        />
         <ChannelManager
           channels={config.channels}
           universe={config.universe}
@@ -124,11 +129,6 @@ export function Calculator() {
           currency={config.currency}
         />
         <InterpretationGuide />
-        <Benchmarks
-          config={config}
-          onChange={(benchmarks) => setConfig((c) => ({ ...c, benchmarks }))}
-          onToggle={(useBenchmarks) => setConfig((c) => ({ ...c, useBenchmarks }))}
-        />
         <EmailPlan config={config} />
         <footer className="pb-4 pt-2 text-center text-xs text-muted-foreground">
           Estimates use the Total Overlap Model with a single global overlap assumption. Plans are saved in this browser only.
