@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 33% 98%;
+    --foreground: 211 53% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 211 53% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 211 53% 11%;
+    --primary: 211 70% 44%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 30% 93%;
+    --secondary-foreground: 211 53% 11%;
+    --muted: 210 30% 94%;
+    --muted-foreground: 213 16% 38%;
+    --accent: 210 30% 94%;
+    --accent-foreground: 211 53% 11%;
+    --destructive: 0 72% 46%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 212 25% 88%;
+    --input: 212 25% 84%;
+    --ring: 211 70% 44%;
+    --radius: 0.625rem;
+  }
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  /* Hide number spinners — they are too small to be useful and crowd narrow cells */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+}
+
+@page {
+  size: A4;
+  margin: 14mm 12mm;
+}
+
+@media print {
+  html,
+  body {
+    background: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    font-size: 11px;
+  }
+  .print-avoid-break {
+    break-inside: avoid;
+  }
+  .print-break-before {
+    break-before: page;
+  }
+  .shadow-sm,
+  .shadow {
+    box-shadow: none !important;
+  }
+}
