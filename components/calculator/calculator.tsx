@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { calculateCampaign, reachCurve } from "@/lib/calc";
-import { MAX_CHANNELS, STORAGE_KEY, defaultConfig, newChannel, sanitizeConfig } from "@/lib/defaults";
+import { MAX_CHANNELS, STORAGE_KEY, defaultConfig, inferCategory, newChannel, sanitizeConfig } from "@/lib/defaults";
 import type { CampaignConfig, Channel } from "@/lib/types";
 import { Benchmarks } from "./benchmarks";
 import { ChannelManager } from "./channel-manager";
@@ -63,7 +63,16 @@ export function Calculator() {
   const activeChannels = useMemo(() => config.channels.filter((c) => c.enabled), [config.channels]);
 
   const updateChannel = useCallback((id: string, patch: Partial<Channel>) => {
-    setConfig((c) => ({ ...c, channels: c.channels.map((ch) => (ch.id === id ? { ...ch, ...patch } : ch)) }));
+    setConfig((c) => ({
+      ...c,
+      channels: c.channels.map((ch) => {
+        if (ch.id !== id) return ch;
+        const next = { ...ch, ...patch };
+        // Renaming an untyped channel (e.g. "New Channel 6" → "Radio") picks up its type automatically.
+        if (patch.name !== undefined && patch.category === undefined && ch.category === "other") next.category = inferCategory(patch.name);
+        return next;
+      }),
+    }));
   }, []);
   const removeChannel = useCallback((id: string) => {
     setConfig((c) => ({ ...c, channels: c.channels.filter((ch) => ch.id !== id) }));
@@ -90,6 +99,8 @@ export function Calculator() {
         <ConfigCards
           universe={config.universe}
           overlapPct={config.overlapPct}
+          useBenchmarks={config.useBenchmarks}
+          benchmarks={config.benchmarks}
           onUniverse={(universe) => setConfig((c) => ({ ...c, universe }))}
           onOverlap={(overlapPct) => setConfig((c) => ({ ...c, overlapPct }))}
         />
@@ -108,12 +119,16 @@ export function Calculator() {
           result={result}
           curve={curve}
           activeChannels={activeChannels}
-          overlapPct={config.overlapPct}
+          config={config}
           universe={config.universe}
           currency={config.currency}
         />
         <InterpretationGuide />
-        <Benchmarks />
+        <Benchmarks
+          config={config}
+          onChange={(benchmarks) => setConfig((c) => ({ ...c, benchmarks }))}
+          onToggle={(useBenchmarks) => setConfig((c) => ({ ...c, useBenchmarks }))}
+        />
         <EmailPlan config={config} />
         <footer className="pb-4 pt-2 text-center text-xs text-muted-foreground">
           Estimates use the Total Overlap Model with a single global overlap assumption. Plans are saved in this browser only.

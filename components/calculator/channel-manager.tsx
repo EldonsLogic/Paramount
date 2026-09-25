@@ -4,9 +4,9 @@ import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { MAX_CHANNELS } from "@/lib/defaults";
+import { CATEGORIES, MAX_CHANNELS, categoryLabel } from "@/lib/defaults";
 import { CURRENCIES, fmtCPIR, fmtInt, fmtMoney } from "@/lib/format";
-import type { Channel, ChannelResult, CurrencyCode } from "@/lib/types";
+import type { Channel, ChannelCategory, ChannelResult, CurrencyCode } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { NumberField } from "./number-field";
 
@@ -57,13 +57,14 @@ export function ChannelManager({ channels, universe, currency, onCurrency, resul
       </CardHeader>
       <CardContent className="px-0 pb-2 sm:px-5">
         <div className="relative overflow-x-auto overscroll-x-contain">
-          <table className="w-full min-w-[680px] border-collapse text-sm print:min-w-0">
+          <table className="w-full min-w-[800px] border-collapse text-sm print:min-w-0">
             <thead>
               <tr className="border-b">
                 <th className={cn(th, "w-10 pl-5 sm:pl-2")}>
                   <span className="sr-only">Enabled</span>
                 </th>
                 <th className={th}>Channel</th>
+                <th className={cn(th, "w-32")}>Type</th>
                 <th className={cn(th, "w-20")}>Reach %</th>
                 <th className={cn(th, "w-32")}>Spend ({currency})</th>
                 <th className={cn(th, "text-right")}>Unique reach</th>
@@ -103,6 +104,21 @@ export function ChannelManager({ channels, universe, currency, onCurrency, resul
                         className="h-9 min-w-[130px] print:hidden"
                       />
                       <span className="hidden print:inline">{label}</span>
+                    </td>
+                    <td className="px-2 py-2">
+                      <select
+                        value={ch.category}
+                        onChange={(e) => onUpdate(ch.id, { category: e.target.value as ChannelCategory })}
+                        aria-label={`${label} channel type`}
+                        className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring print:hidden"
+                      >
+                        {CATEGORIES.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="hidden print:inline">{categoryLabel(ch.category)}</span>
                     </td>
                     <td className="px-2 py-2">
                       <NumberField
@@ -150,7 +166,7 @@ export function ChannelManager({ channels, universe, currency, onCurrency, resul
               })}
               {channels.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-5 py-8 text-center text-muted-foreground">
+                  <td colSpan={9} className="px-5 py-8 text-center text-muted-foreground">
                     No channels yet — add one to start planning.
                   </td>
                 </tr>

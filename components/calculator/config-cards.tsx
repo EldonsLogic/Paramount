@@ -4,18 +4,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { OVERLAP_MAX, OVERLAP_MIN, UNIVERSE_MAX, UNIVERSE_MIN } from "@/lib/defaults";
+import { benchmarkValue } from "@/lib/calc";
 import { fmtInt } from "@/lib/format";
+import type { OverlapBenchmark } from "@/lib/types";
 import { MethodologyDialog } from "./methodology-dialog";
 import { NumberField } from "./number-field";
 
 interface ConfigCardsProps {
   universe: number;
   overlapPct: number;
+  useBenchmarks: boolean;
+  benchmarks: OverlapBenchmark[];
   onUniverse: (n: number) => void;
   onOverlap: (n: number) => void;
 }
 
-export function ConfigCards({ universe, overlapPct, onUniverse, onOverlap }: ConfigCardsProps) {
+export function ConfigCards({ universe, overlapPct, useBenchmarks, benchmarks, onUniverse, onOverlap }: ConfigCardsProps) {
   return (
     <section aria-label="Campaign configuration" className="grid gap-4 lg:grid-cols-2 print:grid-cols-2">
       <Card>
@@ -51,7 +55,9 @@ export function ConfigCards({ universe, overlapPct, onUniverse, onOverlap }: Con
             <CardTitle>Overlap Model</CardTitle>
             <MethodologyDialog />
           </div>
-          <CardDescription id="overlap-label">Cross-channel audience overlap %</CardDescription>
+          <CardDescription id="overlap-label">
+            {useBenchmarks ? "Default cross-channel overlap % (pairs without a benchmark)" : "Cross-channel audience overlap %"}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-baseline justify-between gap-4">
@@ -75,6 +81,16 @@ export function ConfigCards({ universe, overlapPct, onUniverse, onOverlap }: Con
               <span className="text-right">High (mass market)</span>
             </div>
           </div>
+          <p className="mt-3 text-xs text-muted-foreground print:hidden">
+            {useBenchmarks
+              ? `Channel-pair benchmarks are on (${benchmarks.length} pairs) — edit them under “Industry overlap benchmarks” below.`
+              : "Channel-pair benchmarks are off — this overlap applies to every pair."}
+          </p>
+          {useBenchmarks && benchmarks.length > 0 && (
+            <p className="mt-2 hidden text-xs text-muted-foreground print:block">
+              Pair benchmarks applied: {benchmarks.map((b) => `${b.label} ${benchmarkValue(b).toFixed(1)}%`).join(" · ")}
+            </p>
+          )}
         </CardContent>
       </Card>
     </section>

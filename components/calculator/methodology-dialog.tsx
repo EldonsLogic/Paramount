@@ -32,6 +32,11 @@ export function MethodologyDialog() {
           </div>
         </dl>
         <p className="text-sm text-muted-foreground">Lower CPIR = more efficient reach extension.</p>
+        <p className="text-sm text-muted-foreground">
+          With channel-pair benchmarks on, each channel&rsquo;s overlap is the reach-weighted average of its benchmark overlap with every
+          other channel in the mix (midpoint of each range; the slider value for pairs without a benchmark). That per-channel overlap is
+          then used in the formula above.
+        </p>
       </DialogContent>
     </Dialog>
   );

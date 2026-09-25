@@ -1,4 +1,5 @@
-import { calculateCampaign, overlapMatrix } from "./calc";
+import { benchmarkValue, calculateCampaign, overlapMatrix, reachCurve } from "./calc";
+import { categoryLabel } from "./defaults";
 import { fmtCPIR, fmtInt, fmtMoney, fmtPct, per1KLabel } from "./format";
 import type { CampaignConfig } from "./types";
 
@@ -29,9 +30,11 @@ export function renderPlanEmailHtml(config: CampaignConfig, meta: PlanMeta = {})
   const cur = config.currency;
   const maxInc = Math.max(1, ...r.channelResults.map((c) => c.incrementalReach));
   const active = config.channels.filter((c) => c.enabled);
-  const matrix = overlapMatrix(active, config.overlapPct);
+  const matrix = overlapMatrix(active, config);
   const date = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
   const font = "font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;";
+  const cell = `padding:6px 8px;border-bottom:1px solid #e6ebf1;${font}font-size:12px;color:#0D1B2A;`;
+  const head = `padding:6px 8px;${font}font-size:11px;color:#5b6b7f;border-bottom:2px solid #e6ebf1;`;
 
   const metric = (label: string, value: string, sub: string) => `
     <td width="50%" style="padding:6px;" valign="top">
@@ -69,13 +72,60 @@ export function renderPlanEmailHtml(config: CampaignConfig, meta: PlanMeta = {})
       (c) => `
       <tr>
         <td style="padding:6px 8px;border-bottom:1px solid #e6ebf1;${font}font-size:12px;color:${c.enabled ? "#0D1B2A" : "#9aa7b6"};">${esc(c.name)}${c.enabled ? "" : " (off)"}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e6ebf1;${font}font-size:12px;color:#5b6b7f;">${categoryLabel(c.category)}</td>
         <td align="right" style="padding:6px 8px;border-bottom:1px solid #e6ebf1;${font}font-size:12px;color:#0D1B2A;">${fmtPct(c.reach, 0)}</td>
         <td align="right" style="padding:6px 8px;border-bottom:1px solid #e6ebf1;${font}font-size:12px;color:#0D1B2A;">${fmtMoney(c.spend, cur)}</td>
       </tr>`
     )
     .join("");
 
+  const overlapLabel = config.useBenchmarks ? "Default overlap" : "Overlap assumption";
+  const benchmarksHtml =
+    config.useBenchmarks && config.benchmarks.length
+      ? `
+  <tr><td style="padding:16px 24px 0;${font}font-size:12px;color:#5b6b7f;">Channel-pair overlap benchmarks applied (midpoint of range):</td></tr>
+  <tr><td style="padding:6px 24px 0;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+      ${config.benchmarks
+        .map(
+          (b) => `<tr>
+        <td style="${cell}">${esc(b.label)}</td>
+        <td align="right" style="${cell}color:#5b6b7f;">${fmtPct(b.low, 0)}–${fmtPct(b.high, 0)}</td>
+        <td align="right" style="${cell}font-weight:600;">${fmtPct(benchmarkValue(b))}</td>
+      </tr>`
+        )
+        .join("")}
+    </table>
+  </td></tr>`
+      : "";
   const maxOff = Math.max(0.0001, ...matrix.flatMap((row, i) => row.filter((_, j) => i !== j)));
+  const curve = reachCurve(config, r).slice(1);
+  const pctU = (n: number) => fmtPct((n / config.universe) * 100);
+  const buildUpHtml = curve.length
+    ? `
+  <tr><td style="padding:24px 24px 8px;${font}font-size:15px;font-weight:700;color:#0D1B2A;">Reach build-up</td></tr>
+  <tr><td style="padding:0 24px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+      <tr>
+        <th align="left" style="${head}">Step</th>
+        <th align="right" style="${head}">Added</th>
+        <th align="right" style="${head}">Cumulative</th>
+        <th align="right" style="${head}">% universe</th>
+      </tr>
+      ${curve
+        .map(
+          (p, i) => `<tr>
+        <td style="${cell}"><span style="color:#5b6b7f;">${i + 1}.</span> <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin:0 4px;"></span>${esc(p.label)}</td>
+        <td align="right" style="${cell}color:#5b6b7f;">+${fmtInt(p.added)}</td>
+        <td align="right" style="${cell}font-weight:600;">${fmtInt(p.reach)}</td>
+        <td align="right" style="${cell}">${pctU(p.reach)}</td>
+      </tr>`
+        )
+        .join("")}
+    </table>
+  </td></tr>`
+    : "";
+
   const matrixHtml =
     active.length > 1
       ? `
@@ -147,21 +197,24 @@ export function renderPlanEmailHtml(config: CampaignConfig, meta: PlanMeta = {})
   <tr><td style="padding:0 24px;"><img src="${meta.chartSrc}" width="592" alt="Reach curve" style="display:block;width:100%;max-width:592px;height:auto;border:0;"></td></tr>`
       : ""
   }
+  ${buildUpHtml}
   ${matrixHtml}
   <tr><td style="padding:24px 24px 8px;${font}font-size:15px;font-weight:700;color:#0D1B2A;">Plan inputs</td></tr>
   <tr><td style="padding:0 24px;${font}font-size:12px;color:#5b6b7f;">
-    Universe: <b style="color:#0D1B2A;">${fmtInt(config.universe)}</b> · Overlap assumption: <b style="color:#0D1B2A;">${fmtPct(config.overlapPct, 0)}</b> · Currency: <b style="color:#0D1B2A;">${cur}</b>
+    Universe: <b style="color:#0D1B2A;">${fmtInt(config.universe)}</b> · ${overlapLabel}: <b style="color:#0D1B2A;">${fmtPct(config.overlapPct, 0)}</b> · Currency: <b style="color:#0D1B2A;">${cur}</b>
   </td></tr>
   <tr><td style="padding:8px 24px 0;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
       <tr>
         <th align="left" style="padding:6px 8px;${font}font-size:11px;color:#5b6b7f;border-bottom:2px solid #e6ebf1;">Channel</th>
+        <th align="left" style="padding:6px 8px;${font}font-size:11px;color:#5b6b7f;border-bottom:2px solid #e6ebf1;">Type</th>
         <th align="right" style="padding:6px 8px;${font}font-size:11px;color:#5b6b7f;border-bottom:2px solid #e6ebf1;">Reach</th>
         <th align="right" style="padding:6px 8px;${font}font-size:11px;color:#5b6b7f;border-bottom:2px solid #e6ebf1;">Spend</th>
       </tr>
       ${inputRows}
     </table>
   </td></tr>
+  ${benchmarksHtml}
   <tr><td style="padding:24px;${font}font-size:11px;line-height:1.5;color:#7a8898;">
     Methodology — Total Overlap Model: combined reach = 1 − ∏[1 − Rᵢ × (1 − overlap%)]. Incremental reach of a channel = reach(all) − reach(all minus that channel). CPIR = spend ÷ incremental unique people.
     ${meta.sender ? `<br><br>Sent by ${esc(meta.sender)} via Incremental Reach Calculator.` : ""}
@@ -197,7 +250,10 @@ export function renderPlanEmailText(config: CampaignConfig, meta: PlanMeta = {})
       (c, i) => `${i + 1}. ${c.channel.name} — ${fmtInt(c.incrementalReach)} incremental · CPIR ${fmtCPIR(c.cpir, cur)} · ${c.efficiencyRating}`
     ),
     "",
-    `Universe: ${fmtInt(config.universe)} · Overlap assumption: ${fmtPct(config.overlapPct, 0)} · Currency: ${cur}`,
+    `Universe: ${fmtInt(config.universe)} · ${config.useBenchmarks ? "Default overlap" : "Overlap assumption"}: ${fmtPct(config.overlapPct, 0)} · Currency: ${cur}`,
+    ...(config.useBenchmarks && config.benchmarks.length
+      ? ["Pair benchmarks: " + config.benchmarks.map((b) => `${b.label} ${fmtPct(benchmarkValue(b))}`).join(" · ")]
+      : []),
   ];
   return lines.join("\n");
 }

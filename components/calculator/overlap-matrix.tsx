@@ -1,17 +1,17 @@
 import { overlapMatrix } from "@/lib/calc";
-import type { Channel } from "@/lib/types";
+import type { CampaignConfig, Channel } from "@/lib/types";
 
 interface OverlapMatrixProps {
   channels: Channel[]; // enabled channels only
-  overlapPct: number;
+  config: CampaignConfig;
 }
 
-export function OverlapMatrix({ channels, overlapPct }: OverlapMatrixProps) {
+export function OverlapMatrix({ channels, config }: OverlapMatrixProps) {
   if (channels.length === 0) {
     return <p className="py-8 text-center text-sm text-muted-foreground">Enable at least one channel to see the overlap matrix.</p>;
   }
 
-  const m = overlapMatrix(channels, overlapPct);
+  const m = overlapMatrix(channels, config);
   const offDiag = m.flatMap((row, i) => row.filter((_, j) => i !== j));
   const max = Math.max(0.0001, ...offDiag);
 
@@ -71,7 +71,7 @@ export function OverlapMatrix({ channels, overlapPct }: OverlapMatrixProps) {
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
           Darker cells = more audience duplication between those channels. Diagonal shows each channel&rsquo;s own reach. Cell = (Rᵢ × Rⱼ ×
-          overlap) as % of universe.
+          pair overlap) as % of universe.
         </p>
       </div>
     </div>

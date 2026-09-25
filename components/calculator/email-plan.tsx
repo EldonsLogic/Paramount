@@ -14,7 +14,7 @@ import type { CampaignConfig } from "@/lib/types";
 const EMAIL_RE = /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/;
 const BCC = DEFAULT_AUTH_EMAIL;
 const CHART_W = 680;
-const CHART_H = 300;
+const CHART_H = 320;
 
 type Status =
   | { kind: "idle" }

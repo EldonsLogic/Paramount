@@ -15,8 +15,9 @@ CPIR                = Spend ÷ Incremental unique people reached
 ```
 
 - Higher overlap ⇒ more conservative reach estimates.
+- **Channel-pair benchmarks (default on):** each channel has a type (TV, Digital Video, CTV, Social, Display, OOH, Audio, Other). The editable benchmark table gives an overlap range per pair of types; the midpoint is applied. Each channel's overlap `ovᵢ` is the reach-weighted average of its pair overlaps with every other channel in the mix, and `ovᵢ` replaces `ov` in the formula above. Pairs with no benchmark use the slider value. Turn benchmarks off to use the single slider overlap for every pair (the original model).
 - Efficiency rating splits the CPIR range into thirds: bottom = **Efficient**, middle = **Average**, top = **Costly**.
-- Overlap matrix cell `(i, j)` = `Rᵢ × Rⱼ × ov` as a % of universe; the diagonal is each channel's own reach.
+- Overlap matrix cell `(i, j)` = `Rᵢ × Rⱼ × ovᵢⱼ` as a % of universe (pair overlap); the diagonal is each channel's own reach.
 - Average CPIR = total spend ÷ total incremental people.
 
 The implementation lives in [`lib/calc.ts`](lib/calc.ts).
@@ -57,6 +58,7 @@ No email service or setup is needed — plans are sent from your own Outlook mai
 
 - Login-protected (single account, signed HTTP-only session cookie, 12-hour expiry)
 - Plans auto-save to `localStorage` (`irc_campaign_v1`); **Reset to defaults** in the header
+- Editable industry overlap benchmarks (add/remove pairs, edit ranges, reset) that drive the calculations
 - Currency selector (USD, EUR, GBP, AED, SAR, EGP) — display only, no FX conversion
 - **Export PDF** → print-optimized A4 report with all three result views
 - One-click formatted Outlook email of the plan (including the reach-curve chart), always BCC'd to the plan owner
