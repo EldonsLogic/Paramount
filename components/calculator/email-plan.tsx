@@ -1,46 +1,43 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { CheckCircle2, Globe, Loader2, Mail, Monitor, Send } from "lucide-react";
+import { useState } from "react";
+import { CheckCircle2, Globe, Loader2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DEFAULT_AUTH_EMAIL } from "@/lib/auth";
-import { planSubject, renderPlanEmailFragment, renderPlanEmailText } from "@/lib/report";
+import { buildDraftEml, downloadFile, svgToPngBase64 } from "@/lib/eml";
+import { planSubject, renderPlanEmailFragment, renderPlanEmailHtml, renderPlanEmailText } from "@/lib/report";
 import type { CampaignConfig } from "@/lib/types";
 
 const EMAIL_RE = /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/;
 const BCC = DEFAULT_AUTH_EMAIL;
+const CHART_W = 680;
+const CHART_H = 300;
 
 type Status =
   | { kind: "idle" }
-  | { kind: "sending" }
-  | { kind: "sent"; to: string[] }
+  | { kind: "working" }
+  | { kind: "downloaded"; filename: string }
   | { kind: "copied" }
   | { kind: "prefilled" }
   | { kind: "error"; message: string };
 
-/** Encode for mailto/deeplink query strings (spaces as %20 — mail clients show "+" literally). */
+/** Query string for deeplinks (spaces as %20 — mail clients show "+" literally). */
 const qs = (params: Record<string, string>) =>
   Object.entries(params)
     .filter(([, v]) => v)
     .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
     .join("&");
 
-async function copyRichReport(html: string, text: string): Promise<boolean> {
-  try {
-    if (typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) return false;
-    await navigator.clipboard.write([
-      new ClipboardItem({
-        "text/html": new Blob([html], { type: "text/html" }),
-        "text/plain": new Blob([text], { type: "text/plain" }),
-      }),
-    ]);
-    return true;
-  } catch {
-    return false;
-  }
+async function reachCurvePng(): Promise<string | null> {
+  const svg = document.querySelector<SVGSVGElement>("#reach-curve-fixed svg.recharts-surface");
+  return svg ? svgToPngBase64(svg, CHART_W, CHART_H) : null;
+}
+
+function safeFilename(s: string) {
+  return s.replace(/[\\/:*?"<>|]+/g, "").trim() || "Incremental Reach Plan";
 }
 
 export function EmailPlan({ config }: { config: CampaignConfig }) {
@@ -48,56 +45,67 @@ export function EmailPlan({ config }: { config: CampaignConfig }) {
   const [planName, setPlanName] = useState("");
   const [note, setNote] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
-  const [canSend, setCanSend] = useState(false);
-
-  useEffect(() => {
-    fetch("/api/send-plan")
-      .then((r) => (r.ok ? r.json() : { configured: false }))
-      .then((d) => setCanSend(Boolean(d.configured)))
-      .catch(() => setCanSend(false));
-  }, []);
 
   const recipients = to.split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean);
-  const valid = recipients.length > 0 && recipients.every((e) => EMAIL_RE.test(e));
-  // Outlook buttons work with no recipient too (fill it in Outlook), but not with a malformed one.
-  const outlookOk = recipients.length === 0 || valid;
-  const busy = status.kind === "sending";
+  const valid = recipients.every((e) => EMAIL_RE.test(e)); // empty is fine — add recipients in Outlook
+  const working = status.kind === "working";
 
-  async function openInOutlook(target: "app" | "web") {
-    const meta = { planName, note };
-    const subject = planSubject(meta);
-    const text = renderPlanEmailText(config, meta);
-    const copied = await copyRichReport(renderPlanEmailFragment(config, meta), text);
-    // If the formatted copy worked the body stays empty for pasting; otherwise prefill plain text.
-    const body = copied ? "" : text;
-    const toList = recipients.join(target === "app" ? "," : ";");
-
-    if (target === "app") {
-      window.location.href = `mailto:${toList}?${qs({ bcc: BCC, subject, body })}`;
-    } else {
-      const url = `https://outlook.office.com/mail/deeplink/compose?${qs({ to: toList, bcc: BCC, subject, body })}`;
-      window.open(url, "_blank", "noopener");
+  /** Outlook desktop: download an unsent .eml draft with the formatted report and chart embedded. */
+  async function createOutlookDraft(e?: React.FormEvent) {
+    e?.preventDefault();
+    if (!valid) return;
+    setStatus({ kind: "working" });
+    try {
+      const png = await reachCurvePng();
+      const meta = { planName, note, chartSrc: png ? "cid:reachcurve" : undefined };
+      const subject = planSubject(meta);
+      const eml = buildDraftEml({
+        to: recipients,
+        bcc: [BCC],
+        subject,
+        html: renderPlanEmailHtml(config, meta),
+        text: renderPlanEmailText(config, meta),
+        images: png ? [{ cid: "reachcurve", filename: "reach-curve.png", base64Png: png }] : [],
+      });
+      const filename = `${safeFilename(subject)}.eml`;
+      downloadFile(filename, eml, "message/rfc822");
+      setStatus({ kind: "downloaded", filename });
+    } catch {
+      setStatus({ kind: "error", message: "Could not create the email draft. Please try again." });
     }
-    setStatus(copied ? { kind: "copied" } : { kind: "prefilled" });
   }
 
-  async function send(e: React.FormEvent) {
-    e.preventDefault();
-    if (!valid || !canSend) return;
-    setStatus({ kind: "sending" });
+  /** Outlook on the web can't open .eml drafts: copy the formatted report and open a prefilled compose window. */
+  async function openOutlookWeb() {
+    if (!valid) return;
+    // Open the tab first, inside the click, so popup blockers allow it.
+    const win = window.open("about:blank", "_blank");
+    const png = await reachCurvePng();
+    const meta = { planName, note, chartSrc: png ? `data:image/png;base64,${png}` : undefined };
+    const text = renderPlanEmailText(config, meta);
+    let copied = false;
     try {
-      const res = await fetch("/api/send-plan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: recipients.join(","), planName, note, config }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) setStatus({ kind: "sent", to: data.sentTo ?? recipients });
-      else if (res.status === 401) setStatus({ kind: "error", message: "Your session has expired — please sign in again." });
-      else setStatus({ kind: "error", message: data.error || "Could not send the email. Try the Outlook option instead." });
+      if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/html": new Blob([renderPlanEmailFragment(config, meta)], { type: "text/html" }),
+            "text/plain": new Blob([text], { type: "text/plain" }),
+          }),
+        ]);
+        copied = true;
+      }
     } catch {
-      setStatus({ kind: "error", message: "Network error — the email was not sent. Try the Outlook option instead." });
+      copied = false;
     }
+    const url = `https://outlook.office.com/mail/deeplink/compose?${qs({
+      to: recipients.join(";"),
+      bcc: BCC,
+      subject: planSubject(meta),
+      body: copied ? "" : text,
+    })}`;
+    if (win) win.location.href = url;
+    else window.open(url, "_blank");
+    setStatus(copied ? { kind: "copied" } : { kind: "prefilled" });
   }
 
   return (
@@ -108,11 +116,12 @@ export function EmailPlan({ config }: { config: CampaignConfig }) {
           Email this plan
         </CardTitle>
         <CardDescription>
-          A formatted report of the current plan — metrics, channel ranking, overlap matrix and inputs. A copy is always BCC&rsquo;d to {BCC}.
+          Creates a formatted Outlook email with the full plan — metrics, reach curve, channel ranking, overlap matrix and inputs — sent
+          from your own mailbox. A copy is always BCC&rsquo;d to {BCC}.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={send} className="grid gap-4 md:grid-cols-2">
+        <form onSubmit={createOutlookDraft} className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="email-to">Send to</Label>
             <Input
@@ -124,13 +133,13 @@ export function EmailPlan({ config }: { config: CampaignConfig }) {
               value={to}
               onChange={(e) => {
                 setTo(e.target.value);
-                if (!busy) setStatus({ kind: "idle" });
+                if (!working) setStatus({ kind: "idle" });
               }}
-              aria-invalid={to.length > 0 && !valid}
+              aria-invalid={!valid}
               aria-describedby="email-to-help"
             />
-            <p id="email-to-help" className="text-xs text-muted-foreground">
-              Separate multiple addresses with commas.
+            <p id="email-to-help" className={valid ? "text-xs text-muted-foreground" : "text-xs text-red-700"}>
+              {valid ? "Separate multiple addresses with commas." : "Check the email address format."}
             </p>
           </div>
           <div className="space-y-2">
@@ -150,48 +159,43 @@ export function EmailPlan({ config }: { config: CampaignConfig }) {
             />
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap md:col-span-2">
-            {canSend && (
-              <Button type="submit" disabled={!valid || busy}>
-                {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
-                Send email
-              </Button>
-            )}
-            <Button type="button" variant={canSend ? "outline" : "default"} disabled={!outlookOk || busy} onClick={() => openInOutlook("app")}>
-              <Monitor className="h-4 w-4" aria-hidden="true" />
-              Open in Outlook app
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center md:col-span-2">
+            <Button type="submit" disabled={!valid || working}>
+              {working ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Mail className="h-4 w-4" aria-hidden="true" />}
+              Create email in Outlook
             </Button>
-            <Button type="button" variant="outline" disabled={!outlookOk || busy} onClick={() => openInOutlook("web")}>
+            <Button type="button" variant="outline" disabled={!valid || working} onClick={openOutlookWeb}>
               <Globe className="h-4 w-4" aria-hidden="true" />
-              Open in Outlook on the web
+              Use Outlook on the web instead
             </Button>
           </div>
 
           <div aria-live="polite" className="text-sm md:col-span-2">
-            {status.kind === "sent" && (
-              <p className="flex items-center gap-1.5 text-emerald-700">
-                <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
-                Sent to {status.to.join(", ")}
-              </p>
+            {status.kind === "downloaded" && (
+              <div className="rounded-md bg-emerald-50 px-3 py-2 text-emerald-900">
+                <p className="flex items-center gap-1.5 font-medium">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  Email ready: {status.filename}
+                </p>
+                <p className="mt-1">
+                  Open it from your browser&rsquo;s downloads — Outlook opens it as a new email with the formatted plan, recipients and BCC
+                  filled in. Review and press Send.
+                </p>
+              </div>
             )}
             {status.kind === "copied" && (
-              <p className="rounded-md bg-emerald-50 px-3 py-2 text-emerald-800">
-                <strong>Report copied.</strong> In the new Outlook email, click in the message body and paste (Ctrl+V on Windows, ⌘V on Mac), then
-                press Send. Recipient, subject and BCC are already filled in.
+              <p className="rounded-md bg-emerald-50 px-3 py-2 text-emerald-900">
+                <strong>Formatted plan copied.</strong> In the Outlook tab, click in the message body and paste (Ctrl+V on Windows, ⌘V on Mac),
+                then press Send. Recipient, subject and BCC are already filled in.
               </p>
             )}
             {status.kind === "prefilled" && (
               <p className="rounded-md bg-amber-50 px-3 py-2 text-amber-900">
-                Your browser blocked copying the formatted report, so a plain-text summary was added to the email instead. Check the
-                email and press Send.
+                Your browser blocked copying the formatted plan, so a plain-text summary was added to the email instead. For the formatted
+                version use &ldquo;Create email in Outlook&rdquo;.
               </p>
             )}
             {status.kind === "error" && <p className="text-red-700">{status.message}</p>}
-            {status.kind === "idle" && !canSend && (
-              <p className="text-xs text-muted-foreground">
-                Opens a new email in Outlook with the formatted report ready to paste — it&rsquo;s sent from your own mailbox.
-              </p>
-            )}
           </div>
         </form>
       </CardContent>

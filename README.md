@@ -37,14 +37,14 @@ Open http://localhost:3000 and sign in.
 | `AUTH_EMAIL` | no (defaults to `zaki.hussein@paramountcarat.com`) | The account allowed to sign in |
 | `AUTH_PASSWORD` | **yes** | Password for that account |
 | `AUTH_SECRET` | **yes** | 32+ char random string used to sign session cookies (`openssl rand -hex 32`) |
-| `GMAIL_USER` | for one-click send | Gmail address the app sends from |
-| `GMAIL_APP_PASSWORD` | for one-click send | 16-character app password from https://myaccount.google.com/apppasswords (requires 2-Step Verification) |
-| `EMAIL_BCC` | no (defaults to `zaki.hussein@paramountcarat.com`) | Every plan email is BCC'd here |
 
 ### Emailing a plan
 
-- **Open in Outlook app / Outlook on the web** — always available, no setup. Copies the formatted report to the clipboard and opens a new email with recipient, subject and BCC filled in; paste into the body and press Send. The email comes from your own mailbox.
-- **Send email** — appears only when `GMAIL_USER` and `GMAIL_APP_PASSWORD` are set. Sends the formatted HTML report directly via Gmail, BCC'd to `EMAIL_BCC`, with replies going to the signed-in user.
+No email service or setup is needed — plans are sent from your own Outlook mailbox:
+
+- **Create email in Outlook** downloads an unsent email draft (`.eml`). Opening it launches Outlook (Windows or Mac desktop) with a new, fully formatted message: metrics, reach-curve chart, channel ranking, overlap matrix and plan inputs, with recipients, subject and a BCC to `zaki.hussein@paramountcarat.com` already filled in. Review and press Send.
+  Tip: in Chrome/Edge, use the download's **⋯ → Always open files of this type** so future drafts open in Outlook straight away.
+- **Use Outlook on the web instead** copies the formatted plan to the clipboard and opens an Outlook on the web compose window with recipient, subject and BCC filled in — paste into the body and send.
 
 ## Deploy to Vercel
 
@@ -59,9 +59,9 @@ Open http://localhost:3000 and sign in.
 - Plans auto-save to `localStorage` (`irc_campaign_v1`); **Reset to defaults** in the header
 - Currency selector (USD, EUR, GBP, AED, SAR, EGP) — display only, no FX conversion
 - **Export PDF** → print-optimized A4 report with all three result views
-- Email a formatted HTML report via Outlook (no setup) or Gmail (one-click), always BCC'd to the plan owner
+- One-click formatted Outlook email of the plan (including the reach-curve chart), always BCC'd to the plan owner
 - Responsive: desktop, tablet (stacked config, 2×2 metrics), mobile (single column, scrollable channel table, matrix hidden)
 
 ## A note on "no server-side logic"
 
-The calculator itself is 100% client-side. Two small server routes exist because the features require them: **login** (a password checked in the browser would be visible to anyone who opens dev tools) and **one-click email sending** (browsers cannot send email directly, and the Gmail app password must stay secret). Both run as Vercel serverless functions — no database.
+The calculator and email drafting are 100% client-side. The only server code is **login** (`/api/login`, `/api/logout` and the middleware), because a password checked in the browser would be visible to anyone who opens dev tools. No database, no email service.

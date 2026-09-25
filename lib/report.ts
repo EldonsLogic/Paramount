@@ -6,6 +6,8 @@ export interface PlanMeta {
   planName?: string;
   note?: string;
   sender?: string;
+  /** Image URL for the reach curve (e.g. "cid:reachcurve" in an .eml). Omitted = no chart section. */
+  chartSrc?: string;
 }
 
 const esc = (s: string) =>
@@ -139,6 +141,12 @@ export function renderPlanEmailHtml(config: CampaignConfig, meta: PlanMeta = {})
       ${rankingRows || `<tr><td colspan="5" style="padding:12px 8px;${font}font-size:13px;color:#5b6b7f;">No active channels.</td></tr>`}
     </table>
   </td></tr>
+  ${
+    meta.chartSrc
+      ? `<tr><td style="padding:24px 24px 8px;${font}font-size:15px;font-weight:700;color:#0D1B2A;">Reach curve — cumulative deduplicated reach</td></tr>
+  <tr><td style="padding:0 24px;"><img src="${meta.chartSrc}" width="592" alt="Reach curve" style="display:block;width:100%;max-width:592px;height:auto;border:0;"></td></tr>`
+      : ""
+  }
   ${matrixHtml}
   <tr><td style="padding:24px 24px 8px;${font}font-size:15px;font-weight:700;color:#0D1B2A;">Plan inputs</td></tr>
   <tr><td style="padding:0 24px;${font}font-size:12px;color:#5b6b7f;">

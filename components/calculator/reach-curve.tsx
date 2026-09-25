@@ -93,7 +93,8 @@ export function ReachCurve({ data, universe, visible }: ReachCurveProps & { visi
           </ResponsiveContainer>
         )}
       </div>
-      <div className="hidden print:block">
+      {/* Also rasterised into the Outlook email draft — keep the id in sync with email-plan.tsx. */}
+      <div id="reach-curve-fixed" className="hidden print:block">
         <Chart data={data} universe={universe} width={680} height={300} fillId="reachFillPrint" />
       </div>
     </figure>
